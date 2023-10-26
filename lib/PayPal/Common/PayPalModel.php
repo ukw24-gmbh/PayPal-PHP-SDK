@@ -11,6 +11,8 @@ use PayPal\Validation\JsonValidator;
  */
 class PayPalModel
 {
+	
+	protected $suppressValidationErrors = false;
 
     private $_propMap = array();
 
@@ -200,63 +202,85 @@ class PayPalModel
      */
     public function fromArray($arr)
     {
-        if (!empty($arr)) {
-            // Iterate over each element in array
-            foreach ($arr as $k => $v) {
-                // If the value is an array, it means, it is an object after conversion
-                if (is_array($v)) {
-                    // Determine the class of the object
-                    if (($clazz = ReflectionUtil::getPropertyClass(get_class($this), $k)) != null) {
-                        // If the value is an associative array, it means, its an object. Just make recursive call to it.
-                        if (empty($v)) {
-                            if (ReflectionUtil::isPropertyClassArray(get_class($this), $k)) {
-                                // It means, it is an array of objects.
-                                $this->assignValue($k, array());
-                                continue;
-                            }
-                            $o = new $clazz();
-                            //$arr = array();
-                            $this->assignValue($k, $o);
-                        } elseif (ArrayUtil::isAssocArray($v)) {
-                            /** @var self $o */
-                            $o = new $clazz();
-                            $o->fromArray($v);
-                            $this->assignValue($k, $o);
-                        } else {
-                            // Else, value is an array of object/data
-                            $arr = array();
-                            // Iterate through each element in that array.
-                            foreach ($v as $nk => $nv) {
-                                if (is_array($nv)) {
-                                    $o = new $clazz();
-                                    $o->fromArray($nv);
-                                    $arr[$nk] = $o;
-                                } else {
-                                    $arr[$nk] = $nv;
-                                }
-                            }
-                            $this->assignValue($k, $arr);
-                        }
-                    } else {
-                        $this->assignValue($k, $v);
-                    }
-                } else {
-                    $this->assignValue($k, $v);
-                }
-            }
-        }
-        return $this;
+		$this->suppressValidationErrors = true;
+		
+		try {
+
+			if (!empty($arr)) {
+				// Iterate over each element in array
+				foreach ($arr as $k => $v) {
+					// If the value is an array, it means, it is an object after conversion
+					if (is_array($v)) {
+						// Determine the class of the object
+						if (($clazz = ReflectionUtil::getPropertyClass(get_class($this), $k)) != null) {
+							// If the value is an associative array, it means, its an object. Just make recursive call to it.
+							if (empty($v)) {
+								if (ReflectionUtil::isPropertyClassArray(get_class($this), $k)) {
+									// It means, it is an array of objects.
+									$this->assignValue($k, array());
+									continue;
+								}
+								$o = new $clazz();
+								//$arr = array();
+								$this->assignValue($k, $o);
+							}
+							elseif (ArrayUtil::isAssocArray($v)) {
+								/** @var self $o */
+								$o = new $clazz();
+								$o->fromArray($v);
+								$this->assignValue($k, $o);
+							}
+							else {
+								// Else, value is an array of object/data
+								$arr = array();
+								// Iterate through each element in that array.
+								foreach ($v as $nk => $nv) {
+									if (is_array($nv)) {
+										$o = new $clazz();
+										$o->fromArray($nv);
+										$arr[$nk] = $o;
+									}
+									else {
+										$arr[$nk] = $nv;
+									}
+								}
+								$this->assignValue($k, $arr);
+							}
+						}
+						else {
+							$this->assignValue($k, $v);
+						}
+					}
+					else {
+						$this->assignValue($k, $v);
+					}
+				}
+			}
+
+			return $this;
+		}
+		finally {
+			$this->suppressValidationErrors = false;
+		}
     }
 
     private function assignValue($key, $value)
     {
-        $setter = 'set'. $this->convertToCamelCase($key);
-        // If we find the setter, use that, otherwise use magic method.
-        if (method_exists($this, $setter)) {
-            $this->$setter($value);
-        } else {
-            $this->__set($key, $value);
-        }
+		try {
+			$setter = 'set' . $this->convertToCamelCase($key);
+			// If we find the setter, use that, otherwise use magic method.
+			if (method_exists($this, $setter)) {
+				$this->$setter($value);
+			}
+			else {
+				$this->__set($key, $value);
+			}
+		}
+		catch(\InvalidArgumentException $ex) {
+			// catch errors to workaround bug with invalid data returned from PayPal
+			if (!$this->suppressValidationErrors)
+				throw $ex;
+		}
     }
 
     /**
