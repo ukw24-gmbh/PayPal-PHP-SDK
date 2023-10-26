@@ -1,6 +1,8 @@
 PayPal PHP SDK release notes
 ============================
 
+FIXED big with url validation
+
 1.14.0
 -----
 * Update sdk_config.ini log.LogLevel comments [#983](https://github.com/paypal/PayPal-PHP-SDK/pull/983).
